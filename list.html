@@ -35,6 +35,11 @@
   .navbtn.active{background:var(--ink);color:var(--paper);border-color:var(--ink);
     box-shadow:0 4px 0 -1px #000,0 10px 20px -10px var(--shadow)}
 
+  .filterbar{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .flabel{font-family:'DotGothic16';font-size:.74rem;letter-spacing:.08em;color:#6a6354}
+  .plfilter{min-width:200px;background:#fffdf7;border:1px solid var(--line);border-radius:9px;
+    padding:10px 13px;font-family:inherit;font-size:.9rem;color:var(--ink);cursor:pointer}
+  .plfilter:focus{outline:none;border-color:var(--blood2)}
   .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
   .search{flex:1;min-width:200px;background:#fffdf7;border:1px solid var(--line);border-radius:9px;padding:10px 13px;font-family:inherit;font-size:.9rem}
   .search:focus{outline:none;border-color:var(--blood2)}
@@ -100,6 +105,13 @@
 
   <div class="dupnote" id="dupNote"></div>
 
+  <div class="filterbar">
+    <label class="flabel">PLで絞り込み</label>
+    <select class="plfilter" id="plFilter">
+      <option value="">すべてのPL</option>
+    </select>
+  </div>
+
   <div class="toolbar">
     <input class="search" id="search" placeholder="シナリオ名・PC名・PL名で絞り込み…">
     <span class="count" id="count"></span>
@@ -160,7 +172,18 @@ async function load(){
   const snap=await getDocs(collection(db,"entries"));
   rows=snap.docs.map(d=>({id:d.id,...d.data()}));
   rows.sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+  buildPlFilter();
   render();
+}
+
+// データ中のPL名でプルダウンを構築
+function buildPlFilter(){
+  const sel=$("plFilter");
+  const prev=sel.value;
+  const names=[...new Set(rows.map(r=>r.plName).filter(Boolean))].sort();
+  sel.innerHTML=`<option value="">すべてのPL</option>`+
+    names.map(n=>`<option value="${escAttr(n)}">${esc(n)}</option>`).join("");
+  if(names.includes(prev)) sel.value=prev;
 }
 
 function findDuplicates(list){
@@ -175,7 +198,9 @@ function findDuplicates(list){
 
 function render(){
   const kw=$("search").value.trim().toLowerCase();
+  const plSel=$("plFilter").value;
   const filtered=rows.filter(r=>{
+    if(plSel && r.plName!==plSel) return false;
     if(!kw)return true;
     return (r.scenario||"").toLowerCase().includes(kw)||
            (r.pcName||"").toLowerCase().includes(kw)||
@@ -212,6 +237,7 @@ function render(){
 }
 
 $("search").oninput=render;
+$("plFilter").onchange=render;
 
 // ---- 編集 ----
 function openEdit(id){
