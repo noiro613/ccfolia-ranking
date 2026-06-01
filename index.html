@@ -113,14 +113,15 @@
 
   label.fld{display:block;margin-bottom:14px}
   label.fld span{display:block;font-size:.78rem;color:#6a6354;margin-bottom:5px;font-weight:700}
-  .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+  .msingle{display:block}
+  .mpair{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
   .req{color:var(--blood2);font-weight:900}
-  @media(max-width:560px){.mgrid{grid-template-columns:1fr}}
-  input[type=text],textarea,select{
+  @media(max-width:560px){.mpair{grid-template-columns:1fr}}
+  input[type=text],input[type=number],textarea,select{
     width:100%;font-family:inherit;font-size:.95rem;color:var(--ink);
     background:#fffdf7;border:1px solid var(--line);border-radius:9px;padding:11px 13px;
   }
-  input[type=text]:focus,textarea:focus,select:focus{outline:none;border-color:var(--blood2)}
+  input[type=text]:focus,input[type=number]:focus,textarea:focus,select:focus{outline:none;border-color:var(--blood2)}
   textarea{min-height:120px;resize:vertical;font-family:'DotGothic16',monospace;font-size:.82rem;line-height:1.7}
 
   .pcrow{
@@ -199,7 +200,8 @@
       <h2><span class="num">1</span>数値を手入力</h2>
       <p class="desc">項目ごとに入力してください。<b>*</b> は必須です。SAN値の回数は、ファンブル側に合算して入れてもOK（その場合SAN欄は空でOK）。</p>
 
-      <div class="mgrid">
+      <!-- 上段：1列 -->
+      <div class="msingle">
         <label class="fld">
           <span>シナリオ名</span>
           <input type="text" id="m_scenario" placeholder="例：邂逅">
@@ -216,6 +218,10 @@
           <span>総ロール数 <b class="req">*</b></span>
           <input type="number" id="m_total" min="0" placeholder="例：96">
         </label>
+      </div>
+
+      <!-- 下段：ファンブル2列 -->
+      <div class="mpair">
         <label class="fld">
           <span>ファンブル(96-99) 回数 <b class="req">*</b></span>
           <input type="number" id="m_f99" min="0" placeholder="例：4">
@@ -224,6 +230,10 @@
           <span>ファンブル(100) 回数 <b class="req">*</b></span>
           <input type="number" id="m_f100" min="0" placeholder="例：1">
         </label>
+      </div>
+
+      <!-- 下段：SAN値2列 -->
+      <div class="mpair">
         <label class="fld">
           <span>SAN値(96-99) 回数</span>
           <input type="number" id="m_s99" min="0" placeholder="任意（空=0）">
@@ -237,7 +247,6 @@
       <div class="actions">
         <button class="btn primary" id="manualAdd">この内容で確認へ</button>
       </div>
-      <p class="note">※PCが複数いるPLでも、1件ずつ入力してください（同じPL名で複数回出すと集計時にまとまります）。</p>
     </section>
   </div>
 
