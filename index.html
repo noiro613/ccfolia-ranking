@@ -235,31 +235,34 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
+import { analyzeLog, calcBadRate, parseManualLine } from "./logic.js";
 import {
-  db, collection, addDoc, getDocs, serverTimestamp,
-  analyzeLog, calcBadRate, parseManualLine
+  db, firebaseReady, collection, addDoc, getDocs, serverTimestamp
 } from "./common.js";
 
-// ---- PL候補（ホストが事前に用意する想定。Firestoreの players コレクションから取得）----
+const $ = id => document.getElementById(id);
+let working = [];
+let mode = "log";
 let PL_OPTIONS = [];
+
+// ---- PL候補をFirestoreから取得（失敗してもUIは動く）----
 async function loadPlOptions(){
+  if(!firebaseReady || !db){
+    $("plSourceNote").textContent =
+      "※Firebase未設定のため、PL名は自由入力です（手順書のSTEP4で設定すると選択式になります）。";
+    return;
+  }
   try{
     const snap = await getDocs(collection(db,"players"));
     PL_OPTIONS = snap.docs.map(d=>d.data().name).filter(Boolean).sort();
   }catch(e){ PL_OPTIONS = []; }
-  // フォールバック（players未登録時）
   if(PL_OPTIONS.length===0){
-    document.getElementById("plSourceNote").textContent =
-      "※PL候補が未登録です。Firebaseの players コレクションに名前を入れると選択式になります（手順書参照）。当面は自由入力になります。";
+    $("plSourceNote").textContent =
+      "※PL候補が未登録です。Firebaseの players コレクションに名前を入れると選択式になります。当面は自由入力です。";
   }
 }
-loadPlOptions();
 
-const $ = id => document.getElementById(id);
-let working = []; // [{pcName, plName, totalRolls, fumble96_99, fumble100, san96_99, san100, channels}]
-let mode = "log";
-
-// ---- モード切替 ----
+// ---- モード切替（Firebaseに依存しない＝最優先で登録）----
 $("modeLog").onclick = ()=>{ mode="log"; $("modeLog").classList.add("on"); $("modeManual").classList.remove("on");
   $("logSection").classList.remove("hidden"); $("manualSection").classList.add("hidden"); resetSteps(); };
 $("modeManual").onclick = ()=>{ mode="manual"; $("modeManual").classList.add("on"); $("modeLog").classList.remove("on");
@@ -292,10 +295,23 @@ function readLog(f){
         fumble96_99:s.fumble96_99, fumble100:s.fumble100,
         san96_99:s.san96_99, san100:s.san100, channels:s.channels
       }));
+      // ファイル名からシナリオ名の初期値を作成（あとから編集可）
+      $("scenarioName").value = guessScenarioName(f.name);
       renderAssign();
     }catch(err){toast("解析に失敗："+err.message,"err");}
   };
   r.readAsText(f);
+}
+
+// ファイル名 → シナリオ名の推測
+// 例: "20260117_黄身と蜂蜜_main_.html" → "黄身と蜂蜜"
+//     "ムーンエラーアウトサイダー_HO1__main_.html" → "ムーンエラーアウトサイダー HO1"
+function guessScenarioName(filename){
+  let n = filename.replace(/\.html?$/i, "");      // 拡張子除去
+  n = n.replace(/_+main_*$/i, "");                 // 末尾の _main_ / __main_ 除去
+  n = n.replace(/^\d{6,8}[_\-]?/, "");             // 先頭の日付(6〜8桁)除去
+  n = n.replace(/_+/g, " ").trim();                // 連続アンダースコアを空白に
+  return n || filename;
 }
 
 // ---- 手入力：パース ----
@@ -400,17 +416,19 @@ $("backBtn").onclick=()=>{$("confirmCard").classList.add("hidden");window.scroll
 
 // ---- 保存 ----
 $("saveBtn").onclick=async()=>{
+  if(!firebaseReady || !db){
+    toast("Firebase未設定のため保存できません（手順書STEP4）","err");
+    return;
+  }
   const scenario=$("scenarioName").value.trim();
   const assigned=working.filter(w=>w.plName);
   $("saveBtn").disabled=true;
   try{
     for(const w of assigned){
-      // 公開用メタ（誰でも読める）
       const entryRef = await addDoc(collection(db,"entries"),{
         scenario, pcName:w.pcName, plName:w.plName,
         channels:w.channels, createdAt:serverTimestamp()
       });
-      // 数値（ホストのみ読める：ルールで制御）
       await addDoc(collection(db,"stats"),{
         entryId: entryRef.id,
         scenario, pcName:w.pcName, plName:w.plName,
@@ -437,6 +455,9 @@ function toast(msg,type){
 }
 function escapeHtml(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML;}
 function escapeAttr(s){return String(s).replace(/"/g,"&quot;");}
+
+// 最後にPL候補を読み込み（UIイベントは既に登録済みなので、ここが失敗しても操作可能）
+loadPlOptions();
 </script>
 </body>
 </html>
