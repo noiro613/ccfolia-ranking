@@ -135,14 +135,15 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { db, collection, getDocs, doc, getDoc, updateDoc, deleteDoc, query, orderBy } from "./common.js";
+import { db, firebaseReady, collection, getDocs, doc, getDoc, updateDoc, deleteDoc, query, orderBy } from "./common.js";
 
 const $=id=>document.getElementById(id);
-let rows=[]; // {id, scenario, pcName, plName}
+let rows=[];
 let plOptions=[];
 let editing=null;
 
 async function loadPl(){
+  if(!firebaseReady||!db){plOptions=[];return;}
   try{
     const s=await getDocs(collection(db,"players"));
     plOptions=s.docs.map(d=>d.data().name).filter(Boolean).sort();
@@ -150,10 +151,14 @@ async function loadPl(){
 }
 
 async function load(){
+  if(!firebaseReady||!db){
+    $("empty").style.display="block";
+    $("empty").textContent="Firebase未設定です（手順書STEP4）。設定すると記録が表示されます。";
+    return;
+  }
   await loadPl();
   const snap=await getDocs(collection(db,"entries"));
   rows=snap.docs.map(d=>({id:d.id,...d.data()}));
-  // 新しい順
   rows.sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
   render();
 }
