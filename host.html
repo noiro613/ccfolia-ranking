@@ -124,8 +124,9 @@
 
 <script type="module">
 import {
-  db, collection, getDocs, doc, setDoc, isHost, calcBadRate
+  db, firebaseReady, collection, getDocs, doc, setDoc, isHost
 } from "./common.js";
+import { calcBadRate } from "./logic.js";
 
 const $=id=>document.getElementById(id);
 let lastRanking=null, lastDetails=null;
@@ -141,6 +142,11 @@ function unlock(){
 }
 
 async function countEntries(){
+  if(!firebaseReady||!db){
+    $("statRow").innerHTML=`<div class="stat"><div class="v">—</div><div class="k">Firebase未設定</div></div>`;
+    toast("Firebase未設定です（手順書STEP4）","err");
+    return;
+  }
   try{
     const snap=await getDocs(collection(db,"entries"));
     const rows=snap.docs.map(d=>d.data());
