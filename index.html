@@ -113,6 +113,9 @@
 
   label.fld{display:block;margin-bottom:14px}
   label.fld span{display:block;font-size:.78rem;color:#6a6354;margin-bottom:5px;font-weight:700}
+  .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+  .req{color:var(--blood2);font-weight:900}
+  @media(max-width:560px){.mgrid{grid-template-columns:1fr}}
   input[type=text],textarea,select{
     width:100%;font-family:inherit;font-size:.95rem;color:var(--ink);
     background:#fffdf7;border:1px solid var(--line);border-radius:9px;padding:11px 13px;
@@ -194,15 +197,47 @@
     <!-- ===== 手入力 ===== -->
     <section id="manualSection" class="tabpanel hidden">
       <h2><span class="num">1</span>数値を手入力</h2>
-      <p class="desc">1行 = 1件。複数行まとめて貼れます。PL名は次の手順で選択式に直せます。</p>
-      <label class="fld">
-        <span>入力（例：シナリオ名:邂逅 PC:水仙 紗絵 総ロール数:96回 致命的失敗:5回(内100ファン1回)）</span>
-        <textarea id="manualText" placeholder="シナリオ名:○○ PC:△△ 総ロール数:96回 致命的失敗:5回(内100ファン1回)"></textarea>
-      </label>
-      <div class="actions">
-        <button class="btn primary" id="manualParse">読み込む</button>
+      <p class="desc">項目ごとに入力してください。<b>*</b> は必須です。SAN値の回数は、ファンブル側に合算して入れてもOK（その場合SAN欄は空でOK）。</p>
+
+      <div class="mgrid">
+        <label class="fld">
+          <span>シナリオ名</span>
+          <input type="text" id="m_scenario" placeholder="例：邂逅">
+        </label>
+        <label class="fld">
+          <span>PC名</span>
+          <input type="text" id="m_pc" placeholder="例：水仙 紗絵（任意）">
+        </label>
+        <label class="fld">
+          <span>PL名 <b class="req">*</b></span>
+          <span id="m_plWrap"></span>
+        </label>
+        <label class="fld">
+          <span>総ロール数 <b class="req">*</b></span>
+          <input type="number" id="m_total" min="0" placeholder="例：96">
+        </label>
+        <label class="fld">
+          <span>ファンブル(96-99) 回数 <b class="req">*</b></span>
+          <input type="number" id="m_f99" min="0" placeholder="例：4">
+        </label>
+        <label class="fld">
+          <span>ファンブル(100) 回数 <b class="req">*</b></span>
+          <input type="number" id="m_f100" min="0" placeholder="例：1">
+        </label>
+        <label class="fld">
+          <span>SAN値(96-99) 回数</span>
+          <input type="number" id="m_s99" min="0" placeholder="任意（空=0）">
+        </label>
+        <label class="fld">
+          <span>SAN値(100) 回数</span>
+          <input type="number" id="m_s100" min="0" placeholder="任意（空=0）">
+        </label>
       </div>
-      <p class="note">※「総ロール数」は必須。PL名はこの後ドロップダウンで割り当てます（ズレ防止）。</p>
+
+      <div class="actions">
+        <button class="btn primary" id="manualAdd">この内容で確認へ</button>
+      </div>
+      <p class="note">※PCが複数いるPLでも、1件ずつ入力してください（同じPL名で複数回出すと集計時にまとまります）。</p>
     </section>
   </div>
 
@@ -235,7 +270,7 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { analyzeLog, calcBadRate, parseManualLine } from "./logic.js";
+import { analyzeLog, calcBadRate } from "./logic.js";
 import {
   db, firebaseReady, collection, addDoc, getDocs, serverTimestamp
 } from "./common.js";
@@ -260,13 +295,15 @@ async function loadPlOptions(){
     $("plSourceNote").textContent =
       "※PL候補が未登録です。Firebaseの players コレクションに名前を入れると選択式になります。当面は自由入力です。";
   }
+  // 手入力のPL欄を最新の候補で更新
+  setupManualPlField();
 }
 
 // ---- モード切替（Firebaseに依存しない＝最優先で登録）----
 $("modeLog").onclick = ()=>{ mode="log"; $("modeLog").classList.add("on"); $("modeManual").classList.remove("on");
   $("logSection").classList.remove("hidden"); $("manualSection").classList.add("hidden"); resetSteps(); };
 $("modeManual").onclick = ()=>{ mode="manual"; $("modeManual").classList.add("on"); $("modeLog").classList.remove("on");
-  $("manualSection").classList.remove("hidden"); $("logSection").classList.add("hidden"); resetSteps(); };
+  $("manualSection").classList.remove("hidden"); $("logSection").classList.add("hidden"); resetSteps(); setupManualPlField(); };
 
 function resetSteps(){
   $("assignCard").classList.add("hidden");
@@ -314,29 +351,54 @@ function guessScenarioName(filename){
   return n || filename;
 }
 
-// ---- 手入力：パース ----
-$("manualParse").onclick=()=>{
-  const lines=$("manualText").value.split("\n").map(l=>l.trim()).filter(l=>l&&!l.startsWith("#"));
-  if(lines.length===0){toast("入力がありません","err");return;}
-  try{
-    working=[];
-    let scenarioGuess="";
-    lines.forEach(line=>{
-      const d=parseManualLine(line);
-      if(d.scenarioName) scenarioGuess=d.scenarioName;
-      // PCが複数 or 無しに対応。無しの場合はPC名=（手入力）
-      const pcs = d.pcNames.length? d.pcNames : ["（PC名なし）"];
-      pcs.forEach(pc=>{
-        working.push({
-          pcName:pc, plName:"", totalRolls:d.totalRolls,
-          fumble96_99:d.fumble96_99, fumble100:d.fumble100,
-          san96_99:d.san96_99, san100:d.san100, channels:["手入力"]
-        });
-      });
-    });
-    if(scenarioGuess) $("scenarioName").value=scenarioGuess;
-    renderAssign();
-  }catch(err){toast(err.message,"err");}
+// ---- 手入力：PL欄を選択式 or 自由入力でセットアップ ----
+function setupManualPlField(){
+  const wrap=$("m_plWrap");
+  if(PL_OPTIONS.length>0){
+    wrap.innerHTML=`<select id="m_pl">
+      <option value="">— PLを選択 —</option>
+      ${PL_OPTIONS.map(p=>`<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join("")}
+    </select>`;
+  }else{
+    wrap.innerHTML=`<input type="text" id="m_pl" placeholder="PL名を入力">`;
+  }
+}
+
+// ---- 手入力：確認へ ----
+$("manualAdd").onclick=()=>{
+  const scenario=$("m_scenario").value.trim();
+  const pc=$("m_pc").value.trim();
+  const pl=($("m_pl")?.value||"").trim();
+  const total=parseInt($("m_total").value,10);
+  const f99=parseInt($("m_f99").value,10);
+  const f100=parseInt($("m_f100").value,10);
+  const s99=$("m_s99").value===""?0:parseInt($("m_s99").value,10);
+  const s100=$("m_s100").value===""?0:parseInt($("m_s100").value,10);
+
+  // 必須チェック
+  if(!pl){toast("PL名は必須です","err");return;}
+  if(isNaN(total)){toast("総ロール数は必須です","err");return;}
+  if(isNaN(f99)){toast("ファンブル(96-99)回数は必須です","err");return;}
+  if(isNaN(f100)){toast("ファンブル(100)回数は必須です","err");return;}
+  // 妥当性
+  if(f99+f100+s99+s100>total){toast("ファンブル等の合計が総ロール数を超えています","err");return;}
+
+  // シナリオ名はSTEP3共通欄にも反映（編集可）
+  $("scenarioName").value=scenario;
+
+  working=[{
+    pcName: pc || pl,           // PC未入力ならPL名で代用
+    plName: pl,
+    totalRolls: total,
+    fumble96_99: isNaN(f99)?0:f99,
+    fumble100: isNaN(f100)?0:f100,
+    san96_99: s99,
+    san100: s100,
+    channels: ["手入力"]
+  }];
+
+  // 手入力はPL確定済みなので、STEP2を飛ばして直接STEP3へ
+  goConfirm();
 };
 
 // ---- STEP2 描画 ----
@@ -440,7 +502,13 @@ $("saveBtn").onclick=async()=>{
       });
     }
     toast(`${assigned.length}件を奉納しました`);
-    setTimeout(()=>{resetSteps();$("scenarioName").value="";$("manualText").value="";},900);
+    setTimeout(()=>{
+      resetSteps();
+      $("scenarioName").value="";
+      // 手入力フォームをクリア
+      ["m_scenario","m_pc","m_total","m_f99","m_f100","m_s99","m_s100"].forEach(id=>{const el=$(id);if(el)el.value="";});
+      if($("m_pl")) $("m_pl").value="";
+    },900);
   }catch(err){
     toast("保存に失敗："+err.message,"err");
   }finally{
