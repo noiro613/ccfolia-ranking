@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ホスト管理 — ダイス運アーカイブ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#10141c; --paper:#f4efe3; --paper2:#ece4d2;
+    --blood:#9a2f2f; --blood2:#c0432f; --gold:#b8923f;
+    --line:#cabd9f; --shadow:rgba(16,20,28,.18); --ok:#3f6b4a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Zen Kaku Gothic New',sans-serif;background:var(--ink);color:var(--paper);min-height:100vh;
+    background-image:radial-gradient(circle at 50% -10%, rgba(154,47,47,.30), transparent 55%)}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.06;z-index:0;
+    background-image:repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 3px)}
+  .wrap{max-width:860px;margin:0 auto;padding:40px 20px 80px;position:relative;z-index:1}
+  .kicker{font-family:'DotGothic16';letter-spacing:.35em;font-size:.72rem;color:var(--gold);text-transform:uppercase}
+  h1{font-weight:900;font-size:clamp(1.9rem,5vw,3rem);margin:.1em 0 .15em;color:var(--paper)}
+  h1 .mark{color:var(--blood2)}
+  .lead{color:#bcae93;font-size:.95rem;max-width:54ch}
+  .badge{display:inline-block;font-family:'DotGothic16';font-size:.68rem;letter-spacing:.2em;
+    border:1px solid var(--gold);color:var(--gold);border-radius:6px;padding:4px 12px;margin-top:14px}
+
+  /* ロック画面 */
+  .gate{margin-top:40px;background:linear-gradient(180deg,#1a202c,#141821);border:1px solid #2a3142;
+    border-radius:16px;padding:46px 30px;text-align:center;box-shadow:0 30px 60px -25px #000}
+  .gate .ic{font-size:3rem}
+  .gate h2{font-size:1.25rem;font-weight:900;margin:14px 0 8px}
+  .gate p{color:#9aa0a6;font-size:.88rem;max-width:38ch;margin:0 auto 22px}
+  .gate input{width:100%;max-width:320px;background:#0c0f16;border:1px solid #2a3142;color:var(--paper);
+    border-radius:10px;padding:13px 16px;font-family:inherit;font-size:1rem;text-align:center;letter-spacing:.1em}
+  .gate input:focus{outline:none;border-color:var(--blood2)}
+  .gate .btn{margin-top:16px}
+
+  .btn{font-family:inherit;font-weight:800;font-size:.92rem;cursor:pointer;border:none;border-radius:10px;padding:13px 26px;transition:.18s}
+  .btn.primary{background:var(--blood);color:#fdf3e7}.btn.primary:hover{background:var(--blood2);transform:translateY(-1px)}
+  .btn.gold{background:var(--gold);color:#241c08}.btn.gold:hover{filter:brightness(1.08);transform:translateY(-1px)}
+  .btn.ghost{background:transparent;border:1px solid #2a3142;color:var(--paper)}.btn.ghost:hover{background:#1a202c}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+  /* ダッシュボード */
+  .dash{margin-top:30px;display:none}
+  .dash.show{display:block}
+  .panel{background:linear-gradient(180deg,#1a202c,#141821);border:1px solid #2a3142;border-radius:14px;
+    padding:24px;margin-bottom:20px}
+  .panel h3{font-size:1.05rem;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+  .panel .sub{color:#9aa0a6;font-size:.84rem;margin-bottom:18px}
+  .periodpick{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .periodpick label{font-size:.8rem;color:#9aa0a6;font-weight:700}
+  .periodpick select{background:#0c0f16;border:1px solid #2a3142;color:var(--paper);
+    border-radius:9px;padding:10px 14px;font-family:inherit;font-size:.92rem;cursor:pointer;min-width:200px}
+  .periodpick select:focus{outline:none;border-color:var(--blood2)}
+  .stat-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  .stat{background:#0c0f16;border:1px solid #2a3142;border-radius:10px;padding:14px 20px;flex:1;min-width:120px}
+  .stat .v{font-family:'DotGothic16';font-size:1.6rem;color:var(--gold)}
+  .stat .k{font-size:.74rem;color:#9aa0a6;margin-top:2px}
+  .acts{display:flex;gap:12px;flex-wrap:wrap}
+
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:.86rem}
+  thead th{font-family:'DotGothic16';font-size:.68rem;letter-spacing:.08em;color:#9aa0a6;text-align:center;
+    padding:10px 8px;border-bottom:2px solid #2a3142}
+  thead th.l{text-align:left}
+  tbody td{padding:11px 8px;border-bottom:1px solid #20273400;border-bottom:1px solid #232a38;text-align:center;color:#d8d2c4}
+  tbody td.l{text-align:left}
+  .rank{font-family:'DotGothic16';font-size:1.15rem}
+  .rank.r1{color:var(--gold)}.rank.r2{color:#c0c6cc}.rank.r3{color:#cd8a4a}
+  .pl{font-weight:800;color:var(--paper)}
+  .pcs{font-size:.7rem;color:#7a8090;margin-top:2px}
+  .rate{font-family:'DotGothic16';font-size:1.15rem;color:#e06a52}
+
+  .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);background:var(--gold);
+    color:#241c08;padding:14px 24px;border-radius:10px;opacity:0;transition:.3s;z-index:50;font-size:.9rem;font-weight:700}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.err{background:var(--blood);color:#fff}
+  .warn{font-size:.78rem;color:#bcae93;margin-top:14px;line-height:1.6;border-top:1px dashed #2a3142;padding-top:14px}
+  @media(max-width:600px){.hide-sp{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">HOST CONSOLE — PRIVATE</div>
+  <h1>管理<span class="mark">の間</span></h1>
+  <p class="lead">ここはホスト専用。合言葉で封を解き、集計してExcelに書き出します。このページは公開ページからリンクしていません。</p>
+  <div class="badge">⚠ このURL・ファイルは他の人に渡さないこと</div>
+
+  <!-- ロック -->
+  <div class="gate" id="gate">
+    <div class="ic">🗝️</div>
+    <h2>封を解く</h2>
+    <p>合言葉を入力してください。正しければ管理画面が開きます。</p>
+    <input type="password" id="pass" placeholder="合言葉" autocomplete="off">
+    <div><button class="btn primary" id="unlockBtn">開く</button></div>
+  </div>
+
+  <!-- ダッシュボード -->
+  <div class="dash" id="dash">
+    <div class="panel">
+      <h3>📊 集計</h3>
+      <p class="sub">まず「データを読み込む」を押し、その後は期のプルダウンを切り替えるだけで番付が即座に変わります。「年間」は同じ年の上期＋下期をまとめます。</p>
+      <div class="periodpick">
+        <label>表示する期</label>
+        <select id="aggPeriod" disabled></select>
+      </div>
+      <div class="stat-row" id="statRow"></div>
+      <div class="acts">
+        <button class="btn primary" id="aggBtn">データを読み込む</button>
+        <button class="btn gold" id="xlsxBtn" disabled>Excelで書き出す</button>
+        <button class="btn ghost" id="lockBtn">封をして閉じる</button>
+      </div>
+      <p class="warn">「データを読み込む」を押した一瞬だけ数値の鍵が開き、読み込み後すぐ閉じます。以降の期切り替えは読み込み済みデータで行うので、鍵は開きません。Excelは前のツールと同じ構成（PLランキング＋各PL別シート）で出力されます。</p>
+    </div>
+
+    <div class="panel" id="resultPanel" style="display:none">
+      <h3>🏴 番付プレビュー <span id="previewPeriod" style="font-size:.8rem;color:var(--gold);font-family:'DotGothic16'"></span></h3>
+      <p class="sub">この内容がExcelに出力されます。公開ページには表示されません。</p>
+      <table>
+        <thead><tr>
+          <th>順</th><th class="l">PL</th><th>悪い出目率</th>
+          <th class="hide-sp">総ロール</th><th class="hide-sp">F96-99</th><th class="hide-sp">F100</th><th>ｼﾅﾘｵ</th>
+        </tr></thead>
+        <tbody id="rankBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import {
+  db, firebaseReady, collection, getDocs, doc, setDoc, isHost, periodLabel
+} from "./common.js";
+import { calcBadRate } from "./logic.js";
+
+const $=id=>document.getElementById(id);
+let lastRanking=null, lastDetails=null, lastPeriodTitle="";
+let allStatsCache=null;
+
+// ---- 封を解く ----
+$("unlockBtn").onclick=unlock;
+$("pass").addEventListener("keydown",e=>{if(e.key==="Enter")unlock();});
+function unlock(){
+  if(!isHost($("pass").value)){toast("合言葉が違います","err");return;}
+  $("gate").style.display="none";
+  $("dash").classList.add("show");
+  countEntries();
+}
+
+async function countEntries(){
+  if(!firebaseReady||!db){
+    $("statRow").innerHTML=`<div class="stat"><div class="v">—</div><div class="k">Firebase未設定</div></div>`;
+    toast("Firebase未設定です（手順書STEP4）","err");
+    return;
+  }
+  try{
+    const snap=await getDocs(collection(db,"entries"));
+    const rows=snap.docs.map(d=>d.data());
+    const scenarios=new Set(rows.map(r=>r.scenario));
+    const pls=new Set(rows.map(r=>r.plName));
+    $("statRow").innerHTML=`
+      <div class="stat"><div class="v">${rows.length}</div><div class="k">登録記録</div></div>
+      <div class="stat"><div class="v">${scenarios.size}</div><div class="k">シナリオ</div></div>
+      <div class="stat"><div class="v">${pls.size}</div><div class="k">PL</div></div>`;
+    buildAggPeriodOptions(rows);
+  }catch(e){toast("読み込み失敗："+e.message,"err");}
+}
+
+// 集計対象の期プルダウンを生成：各期 + 年間 + 全期間
+function buildAggPeriodOptions(rows){
+  const sel=$("aggPeriod");
+  const periods=[...new Set(rows.map(r=>r.period).filter(Boolean))];
+  const years=[...new Set(periods.map(p=>(String(p).match(/^(\d{4})H[12]$/)||[])[1]).filter(Boolean))].sort().reverse();
+  let opts=[];
+  // 個別の期（新しい順）
+  periods.sort().reverse().forEach(p=>opts.push({v:`P:${p}`,t:periodLabel(p)}));
+  // 年間（その年に期が2つ以上ある場合に意味を持つが、1つでも出す）
+  years.forEach(y=>opts.push({v:`Y:${y}`,t:`${y}年 年間`}));
+  // 全期間
+  opts.push({v:"ALL",t:"全期間まとめて"});
+  sel.innerHTML=opts.map(o=>`<option value="${o.v}">${o.t}</option>`).join("");
+}
+
+// ---- 集計：stats を一度だけ読み込んでキャッシュ ----
+$("aggBtn").onclick=async()=>{
+  $("aggBtn").disabled=true;
+  try{
+    // ゲートを開ける
+    await setDoc(doc(db,"hostgate","unlocked"),{open:true,at:Date.now()});
+    const snap=await getDocs(collection(db,"stats"));
+    allStatsCache=snap.docs.map(d=>d.data());
+    // すぐ閉じる
+    await setDoc(doc(db,"hostgate","unlocked"),{open:false,at:Date.now()});
+
+    if(allStatsCache.length===0){toast("集計対象がありません","err");$("aggBtn").disabled=false;return;}
+
+    // 現在のプルダウン選択で集計表示
+    aggregateAndRender();
+    $("aggPeriod").disabled=false;
+    toast(`読み込み完了。期を切り替えて確認できます`);
+  }catch(err){
+    try{await setDoc(doc(db,"hostgate","unlocked"),{open:false,at:Date.now()});}catch(e){}
+    toast("集計失敗："+err.message,"err");
+  }finally{
+    $("aggBtn").disabled=false;
+  }
+};
+
+// プルダウン変更で即再集計（Firestoreは読まない＝キャッシュから）
+$("aggPeriod").onchange=()=>{ if(allStatsCache) aggregateAndRender(); };
+
+// キャッシュから期別に集計して表示
+function aggregateAndRender(){
+  if(!allStatsCache) return;
+  const sel=$("aggPeriod").value || "ALL";
+  let stats = allStatsCache;
+  let periodTitle = "全期間";
+  if(sel.startsWith("P:")){
+    const p=sel.slice(2);
+    stats = allStatsCache.filter(s=>s.period===p);
+    periodTitle = periodLabel(p);
+  }else if(sel.startsWith("Y:")){
+    const y=sel.slice(2);
+    stats = allStatsCache.filter(s=>String(s.period||"").startsWith(y+"H"));
+    periodTitle = `${y}年 年間`;
+  }
+  lastPeriodTitle = periodTitle;
+
+  if(stats.length===0){
+    lastRanking=null; lastDetails=null;
+    $("xlsxBtn").disabled=true;
+    $("resultPanel").style.display="block";
+    $("previewPeriod").textContent=`― ${periodTitle}`;
+    $("rankBody").innerHTML=`<tr><td colspan="7" style="text-align:center;color:#9aa0a6;padding:24px">この期のデータはありません</td></tr>`;
+    return;
+  }
+
+  // PLごとに集計
+  const byPl={};
+  stats.forEach(s=>{
+    const pl=s.plName||"(不明)";
+    if(!byPl[pl])byPl[pl]={plName:pl,pcNames:new Set(),scenarios:new Set(),
+      totalRolls:0,fumble96_99:0,fumble100:0,san96_99:0,san100:0,rows:[]};
+    const o=byPl[pl];
+    o.pcNames.add(s.pcName); if(s.scenario)o.scenarios.add(s.scenario);
+    o.totalRolls+=s.totalRolls||0;o.fumble96_99+=s.fumble96_99||0;o.fumble100+=s.fumble100||0;
+    o.san96_99+=s.san96_99||0;o.san100+=s.san100||0;
+    o.rows.push(s);
+  });
+
+  lastRanking=Object.values(byPl).map(o=>({
+    plName:o.plName,pcNames:Array.from(o.pcNames),scenarioCount:o.scenarios.size,
+    totalRolls:o.totalRolls,fumble96_99:o.fumble96_99,fumble100:o.fumble100,
+    san96_99:o.san96_99,san100:o.san100,badRate:calcBadRate(o)
+  })).sort((a,b)=>b.badRate-a.badRate);
+
+  // 各PL詳細（シナリオ別）
+  lastDetails={};
+  Object.values(byPl).forEach(o=>{
+    lastDetails[o.plName]=o.rows.map(r=>({
+      scenario:r.scenario||"",pcName:r.pcName||"",
+      totalRolls:r.totalRolls||0,fumble96_99:r.fumble96_99||0,fumble100:r.fumble100||0,
+      san96_99:r.san96_99||0,san100:r.san100||0,
+      badRate:calcBadRate(r)
+    })).sort((a,b)=>b.badRate-a.badRate);
+  });
+
+  renderPreview(lastRanking);
+  $("xlsxBtn").disabled=false;
+}
+
+function renderPreview(ranking){
+  $("resultPanel").style.display="block";
+  $("previewPeriod").textContent = lastPeriodTitle ? `― ${lastPeriodTitle}` : "";
+  $("rankBody").innerHTML=ranking.map((r,i)=>`
+    <tr>
+      <td class="rank ${i<3?'r'+(i+1):''}">${i+1}</td>
+      <td class="l"><div class="pl">${esc(r.plName)}</div><div class="pcs">${esc(r.pcNames.join(" / "))}</div></td>
+      <td><span class="rate">${r.badRate.toFixed(2)}%</span></td>
+      <td class="hide-sp">${r.totalRolls}</td>
+      <td class="hide-sp">${r.fumble96_99}</td>
+      <td class="hide-sp">${r.fumble100}</td>
+      <td>${r.scenarioCount}</td>
+    </tr>`).join("");
+}
+
+// ---- Excel出力（前ツールと同じ構成）----
+$("xlsxBtn").onclick=()=>{
+  if(!lastRanking){toast("先に集計してください","err");return;}
+  const wb=XLSX.utils.book_new();
+
+  // シート1: PLランキング
+  const head=["順位","PL名","PC名","総ロール数","ファンブル(96-99)","ファンブル(100)","SAN値(96-99)","SAN値(100)","悪い出目率(%)","シナリオ数"];
+  const rows=[head];
+  lastRanking.forEach((r,i)=>rows.push([
+    i+1,r.plName,r.pcNames.join(", "),r.totalRolls,r.fumble96_99,r.fumble100,r.san96_99,r.san100,
+    Number(r.badRate.toFixed(2)),r.scenarioCount
+  ]));
+  const ws1=XLSX.utils.aoa_to_sheet(rows);
+  ws1["!cols"]=[{wch:6},{wch:14},{wch:30},{wch:12},{wch:16},{wch:14},{wch:14},{wch:12},{wch:14},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws1,"PLランキング");
+
+  // シート2以降: 各PL詳細
+  const used=new Set();
+  Object.entries(lastDetails).forEach(([pl,drows])=>{
+    const aoa=[["シナリオ名","PC名","総ロール数","ファンブル(96-99)","ファンブル(100)","SAN値(96-99)","SAN値(100)","悪い出目率(%)"]];
+    drows.forEach(d=>aoa.push([d.scenario,d.pcName,d.totalRolls,d.fumble96_99,d.fumble100,d.san96_99,d.san100,Number(d.badRate.toFixed(2))]));
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"]=[{wch:24},{wch:20},{wch:12},{wch:16},{wch:14},{wch:14},{wch:12},{wch:14}];
+    let name=pl.replace(/[\\\/\?\*\[\]:]/g,"_").slice(0,28);
+    let base=name,n=2; while(used.has(name)){name=`${base.slice(0,26)}_${n++}`;} used.add(name);
+    XLSX.utils.book_append_sheet(wb,ws,name);
+  });
+
+  const today=new Date().toISOString().slice(0,10);
+  const safePeriod=(lastPeriodTitle||"全期間").replace(/[\\\/\?\*\[\]:]/g,"_");
+  XLSX.writeFile(wb,`ccfolia_ランキング_${safePeriod}_${today}.xlsx`);
+  toast("Excelを書き出しました");
+};
+
+// ---- 封をして閉じる ----
+$("lockBtn").onclick=()=>{
+  $("dash").classList.remove("show");
+  $("gate").style.display="block";
+  $("pass").value="";
+  lastRanking=null;lastDetails=null;allStatsCache=null;
+  $("xlsxBtn").disabled=true;
+  $("aggPeriod").disabled=true;
+  $("resultPanel").style.display="none";
+  window.scrollTo({top:0,behavior:"smooth"});
+};
+
+function toast(m,t){const e=$("toast");e.textContent=m;e.className="toast show"+(t==="err"?" err":"");
+  setTimeout(()=>e.className="toast"+(t==="err"?" err":""),2600);}
+function esc(s){const d=document.createElement("div");d.textContent=s??"";return d.innerHTML;}
+</script>
+</body>
+</html>
