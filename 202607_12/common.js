@@ -12,7 +12,7 @@ const firebaseConfig = {
 };
 
 // ホストの合言葉（仲間内のネタバレ防止用の簡易ロック）
-const HOST_PASSPHRASE = "20260106dice";
+const HOST_PASSPHRASE = "20260712dice";
 
 // ============================================================
 // この投稿ページが対象とする「期」
@@ -20,7 +20,7 @@ const HOST_PASSPHRASE = "20260106dice";
 // 上期用ページなら "2026H1"、下期用ページなら "2026H2"。
 // 来年は "2027H1" のように年＋半期で指定します。
 // ★上期用・下期用でこの1行だけを変えてください★
-const CURRENT_PERIOD = "2026H1";
+const CURRENT_PERIOD = "2026H2";
 
 // 期ラベル → 表示名（一覧やホスト画面で使用）
 function periodLabel(code){
