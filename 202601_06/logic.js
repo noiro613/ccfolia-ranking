@@ -25,8 +25,24 @@ export function analyzeLog(htmlContent) {
     const chMatch = channelText.match(/\[([^\]]+)\]/);
     const channel = chMatch ? `[${chMatch[1]}]` : channelText;
 
-    const diceMatch = rollText.match(/\(1[dD]100[^)]*\)\s*[＞>]\s*(\d+)/);
-    if (!diceMatch) return;
+    // 1D100ロールか判定（6版・7版どちらの書式にも対応）
+    // 6版: (1D100<=80) ＞ 22 ＞ 成功
+    // 7版: (1D100<=70) ボーナス・ペナルティダイス[0] ＞ 83 ＞ 83 ＞ 失敗
+    // 7版(B/Pあり): ... ＞ 25, 85 ＞ 85 ＞ 失敗   ←最後の「＞数字＞結果」の数字が最終出目
+    if (!/\(1[dD]100[^)]*\)/.test(rollText)) return;
+
+    let rollValue = null;
+    // 「＞ 数字 ＞ 結果語」の並び（最終出目）を優先して取る
+    const finalMatch = rollText.match(/[＞>]\s*(\d+)\s*[＞>]\s*[^＞>\d]/);
+    if (finalMatch) {
+      rollValue = parseInt(finalMatch[1], 10);
+    } else {
+      // 結果語なしの素振りロール（例: 1D100 ＞ 63）は最後の「＞ 数字」を取る
+      const all = [...rollText.matchAll(/[＞>]\s*(\d+)/g)];
+      if (all.length === 0) return;
+      rollValue = parseInt(all[all.length - 1][1], 10);
+    }
+    if (rollValue === null || isNaN(rollValue)) return;
 
     if (
       speaker === "system" ||
@@ -40,7 +56,6 @@ export function analyzeLog(htmlContent) {
     }
 
     channelSet.add(channel);
-    const rollValue = parseInt(diceMatch[1], 10);
 
     if (!speakers[speaker]) {
       speakers[speaker] = {
